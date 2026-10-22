@@ -115,6 +115,9 @@ def check_php_fingerprint(base_url):
         return False
 
     if vuln(parts):
+        if parts[0] == 5:
+            warn(f"PHP {version} (5.x): X-Powered-By cannot distinguish Sury backported packages.")
+            warn("  Sury 5.6.40-104+ ships the patches backported — verify the package version manually.")
         ok(f"VULNERABLE — PHP {version} is in the affected range for CVE-2026-109619.")
         ok("  Impact: var_destroy use-after-free reachable via unserialize() + destructor gadget.")
         return True
@@ -124,9 +127,9 @@ def check_php_fingerprint(base_url):
 
 
 def check_session_fixation(base_url):
-    """CVE-2026-109618 — session upload_progress session fixation."""
+    """CVE-2026-109618 — session upload_progress use-after-free / OOM."""
     print()
-    info("CHECK 2 — CVE-2026-109618: session.upload_progress session fixation")
+    info("CHECK 2 — CVE-2026-109618: session.upload_progress use-after-free / OOM")
 
     marker   = rand_base(12)
     # Invalid SID (contains / which is illegal) — triggers the warning
@@ -155,9 +158,9 @@ def check_session_fixation(base_url):
                    "PHP Request Startup" in body)
 
     if indicator_a and indicator_b:
-        ok("VULNERABLE — PHP printed session-startup warnings, confirming upload_progress fixation.")
-        ok("  CVE-2026-109618: attacker can control PHPSESSID for upload-progress sessions.")
-        ok("  Chain: session fixation → session file injection → LFI → RCE (if cleanup=Off).")
+        ok("VULNERABLE — PHP printed session-startup warnings, confirming upload_progress UAF/OOM path.")
+        ok("  CVE-2026-109618: use-after-free / OOM triggered via upload_progress error path.")
+        ok("  Chain: upload_progress injection → session file write → LFI → RCE (if cleanup=Off).")
         return True
     elif indicator_a:
         warn("Partial match — session ID warning triggered but no startup error visible.")
@@ -296,7 +299,7 @@ def print_summary(results):
     print(color("══════════════ RESULTS ══════════════", BOLD))
     labels = {
         "cve109619":     "CVE-2026-109619 (version fingerprint / UAF)",
-        "cve109618":     "CVE-2026-109618 (session upload_progress fixation)",
+        "cve109618":     "CVE-2026-109618 (session upload_progress UAF/OOM)",
         "handler":       "php2shell handler mismatch object injection",
         "session_lfi":   "php2shell session injection + LFI chain",
     }
