@@ -17,7 +17,7 @@
 **php2shell** is a critical vulnerability chain that combines PHP session management weaknesses to achieve unauthenticated Remote Code Execution (RCE) without writing any file to disk:
 
 ```
-Session fixation via upload_progress
+upload_progress use-after-free / OOM
          │
          ▼
   Session file injection (PHP code embedded in filename field)
@@ -33,14 +33,14 @@ Two new CVEs were assigned to the root causes of this chain:
 
 | CVE | Title | Affected PHP | Fixed in |
 |-----|-------|-------------|----------|
-| **CVE-2026-109618** | Session upload_progress session fixation | 5.4.0 – 8.5.11 | 8.2.35 / 8.3.36 / 8.4.27 / 8.5.12 |
+| **CVE-2026-109618** | Session upload_progress use-after-free / OOM | 5.4.0 – 8.5.11 | 8.2.35 / 8.3.36 / 8.4.27 / 8.5.12 |
 | **CVE-2026-109619** | `var_destroy` use-after-free (UAF) via `unserialize()` + destructor gadget | 5.4.0 – 8.5.11 | 8.2.35 / 8.3.36 / 8.4.27 / 8.5.12 |
 
 ---
 
 ## Vulnerability Details
 
-### CVE-2026-109618 — Session upload_progress fixation
+### CVE-2026-109618 — Session upload_progress use-after-free / OOM
 
 When `session.upload_progress.enabled = On` (default in PHP ≥ 5.4), an attacker can supply a crafted `PHPSESSID` cookie in a multipart POST request containing the magic key `PHP_SESSION_UPLOAD_PROGRESS`. PHP creates (or reuses) a session file at the attacker-controlled path, storing the `upload_progress` data — including the multipart filename — verbatim in the session file. If cleanup is disabled (`session.upload_progress.cleanup = Off`), the session file persists indefinitely.
 
@@ -183,7 +183,7 @@ Example JSON output:
 | # | Check | CVE / Type | Requires | Indicator |
 |---|-------|------------|---------|-----------|
 | 1 | PHP version fingerprint | CVE-2026-109619 | Nothing | `X-Powered-By: PHP/x.y.z` in affected range |
-| 2 | Session fixation via upload_progress | CVE-2026-109618 | Nothing | Session startup error in response body |
+| 2 | use-after-free / OOM via upload_progress | CVE-2026-109618 | Nothing | Session startup error in response body |
 | 3 | Handler mismatch deserialization | php2shell-mismatch | `--write-path` + `--read-path` | `Failed to decode session object` |
 | 4 | Session injection + LFI chain | php2shell-lfi | `--lfi` + `--session-path` | Marker echoed back via LFI |
 
@@ -195,7 +195,7 @@ Example JSON output:
 
 | PHP Branch | Vulnerable range | Fixed version |
 |-----------|-----------------|--------------|
-| 5.x | 5.4.0 – latest 5.x | Not patched (EOL) |
+| 5.x | 5.4.0 – latest 5.x | Not patched (EOL) — Sury backported packages (e.g. 5.6.40-104+) may include the fixes; verify the package version |
 | 8.2.x | 8.2.0 – 8.2.34 | **8.2.35** |
 | 8.3.x | 8.3.0 – 8.3.35 | **8.3.36** |
 | 8.4.x | 8.4.0 – 8.4.26 | **8.4.27** |
