@@ -2,7 +2,7 @@
 
 **Comprobador pasivo de exposicion a CVE-2026-109618 / CVE-2026-109619 (php2shell).**
 
-> Idioma: Español | [English](README-powershell.md)
+> Idioma: Español | [English](README.md)
 
 Version en PowerShell de la comprobacion pasiva de `php2shellbt.py`. Determina si un
 servidor web ejecuta una version de PHP dentro del rango afectado leyendo la cabecera
