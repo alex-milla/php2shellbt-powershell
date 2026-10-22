@@ -2,7 +2,7 @@
 
 **Passive PHP exposure checker for CVE-2026-109618 / CVE-2026-109619 (php2shell).**
 
-> Language: English | [Español](README-powershell.es.md)
+> Language: English | [Español](README_es.md)
 
 A standalone PowerShell port of the passive check from `php2shellbt.py`. It determines
 whether a web server runs a PHP version inside the affected range by reading the
