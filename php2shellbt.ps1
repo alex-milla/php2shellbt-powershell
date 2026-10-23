@@ -1,4 +1,4 @@
-﻿# MIT License - Copyright (c) 2026 BTshell
+# MIT License - Copyright (c) 2026 BTshell
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -64,14 +64,18 @@
     8.4.x -> 8.4.27   |   8.5.x -> 8.5.12
 
 .PARAMETER Target
-  Single domain or URL to validate (skips the menu).
-  / Dominio o URL unica que validar (omite el menu).
+  Single domain, IP or URL to validate (skips the menu). Bare domains
+  (example.com), IPv4 (192.168.1.10), IPv6 (2001:db8::1 or [2001:db8::1]
+  to add a port) and full URLs are accepted.
+  / Dominio, IP o URL unica que validar (omite el menu). Se aceptan
+  dominios sin esquema (example.com), IPv4 (192.168.1.10), IPv6
+  (2001:db8::1 o [2001:db8::1] para indicar puerto) y URLs completas.
 
 .PARAMETER TargetsFile
-  .txt file with one domain/URL per line (skips the menu). Empty lines and
-  lines starting with # are ignored.
-  / Archivo .txt con un dominio/URL por linea (omite el menu). Las lineas
-  vacias y las que empiezan por # se ignoran.
+  .txt file with one domain/IP/URL per line (skips the menu). Empty lines
+  and lines starting with # are ignored.
+  / Archivo .txt con un dominio/IP/URL por linea (omite el menu). Las
+  lineas vacias y las que empiezan por # se ignoran.
 
 .PARAMETER Language
   UI language: 'en' (English, default) or 'es' (Espanol).
@@ -88,6 +92,11 @@
 
 .EXAMPLE
   .\php2shellbt.ps1 -Target https://example.com
+
+.EXAMPLE
+  .\php2shellbt.ps1 -Target 192.168.1.10
+  Checks a server by IP when it has no domain name.
+  / Comprueba un servidor por IP cuando no tiene nombre de dominio.
 
 .EXAMPLE
   .\php2shellbt.ps1 -TargetsFile .\targets.txt
@@ -132,15 +141,15 @@ $Script:Strings = @{
         BannerPassive    = '  Passive mode: only reads the remote PHP version (X-Powered-By).'
         BannerNoAttack   = '  Sends no payloads and causes no failures on the server.'
         BannerTarget     = '  Target : {0}'
-        MenuOpt1         = '  1) Validate a single domain'
-        MenuOpt2         = '  2) Validate from a .txt file (one domain/URL per line, in this directory)'
+        MenuOpt1         = '  1) Validate a single domain or IP'
+        MenuOpt2         = '  2) Validate from a .txt file (one domain/IP/URL per line, in this directory)'
         MenuOpt3         = '  3) Language / Idioma: {0}'
         MenuOpt4         = '  4) Exit'
         MenuPrompt       = 'Select an option'
         MenuInvalid      = 'Invalid option: {0}'
         LanguageSwitched = 'Language set to {0}.'
         MenuExit         = 'Exiting.'
-        DomainPrompt     = 'Domain or URL (e.g. example.com or https://example.com)'
+        DomainPrompt     = 'Domain, IP or URL (e.g. example.com, 192.168.1.10, [2001:db8::1] or https://example.com)'
         EmptyDomain      = 'No domain entered.'
         FilePrompt       = 'File name (Enter = targets.txt)'
         Checking         = 'Checking {0} ...'
@@ -197,15 +206,15 @@ $Script:Strings = @{
         BannerPassive    = '  Modo pasivo: solo lee la version remota de PHP (X-Powered-By).'
         BannerNoAttack   = '  No envia payloads ni provoca fallos en el servidor.'
         BannerTarget     = '  Objetivo : {0}'
-        MenuOpt1         = '  1) Validar un solo dominio'
-        MenuOpt2         = '  2) Validar desde un archivo .txt (un dominio/URL por linea, en este directorio)'
+        MenuOpt1         = '  1) Validar un solo dominio o IP'
+        MenuOpt2         = '  2) Validar desde un archivo .txt (un dominio/IP/URL por linea, en este directorio)'
         MenuOpt3         = '  3) Language / Idioma: {0}'
         MenuOpt4         = '  4) Salir'
         MenuPrompt       = 'Selecciona una opcion'
         MenuInvalid      = 'Opcion no valida: {0}'
         LanguageSwitched = 'Idioma cambiado a {0}.'
         MenuExit         = 'Saliendo.'
-        DomainPrompt     = 'Dominio o URL (ej. example.com o https://example.com)'
+        DomainPrompt     = 'Dominio, IP o URL (ej. example.com, 192.168.1.10, [2001:db8::1] o https://example.com)'
         EmptyDomain      = 'No se ha introducido ningun dominio.'
         FilePrompt       = 'Nombre del archivo (Intro = targets.txt)'
         Checking         = 'Comprobando {0} ...'
@@ -408,12 +417,53 @@ function Get-HttpResponse {
 # ── Verdict logic / Logica de veredicto ───────────────────────────────────────
 
 function ConvertTo-TargetUrl {
+    # Acepta dominio, IPv4, IPv6 o URL, con o sin esquema y con puerto.
+    # Una IPv6 sin corchetes se envuelve automaticamente ([::1]); para
+    # indicar puerto en IPv6 usar la forma [IPv6]:puerto. Sin esquema se
+    # usa https por defecto.
+    # Accepts a domain, IPv4, IPv6 or URL, with or without scheme and port.
+    # A bare IPv6 address is wrapped automatically ([::1]); to specify a
+    # port on IPv6 use the form [IPv6]:port. Without a scheme, https is
+    # used by default.
     param([string]$RawTarget)
+
     $url = $RawTarget.Trim().TrimEnd('/')
-    if ($url -notmatch '^(http|https)://') {
-        $url = "https://$url"
+
+    $scheme = ''
+    if ($url -match '^(https?)://(.+)$') {
+        $scheme = $Matches[1]
+        $rest = $Matches[2]
     }
-    return $url
+    else {
+        $rest = $url
+    }
+
+    # Host y puerto: [IPv6]:puerto | IPv4/nombre:puerto | solo host.
+    # Host and port: [IPv6]:port | IPv4/name:port | host only.
+    $hostPart = $rest
+    $portPart = ''
+    if ($rest -match '^\[(.+)\](?::(\d+))?$') {
+        $hostPart = $Matches[1]
+        $portPart = $Matches[2]
+    }
+    elseif ($rest -match '^([^:]+):(\d+)$') {
+        $hostPart = $Matches[1]
+        $portPart = $Matches[2]
+    }
+
+    # IPv6 sin corchetes: se valida como IPv6 real y se envuelve.
+    # Bare IPv6: validated as a real IPv6 address and wrapped.
+    if ($hostPart -match ':') {
+        $parsedIp = $null
+        if ([System.Net.IPAddress]::TryParse($hostPart, [ref]$parsedIp) -and
+            $parsedIp.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetworkV6) {
+            $hostPart = "[$hostPart]"
+        }
+    }
+
+    if (-not $scheme) { $scheme = 'https' }
+    if ($portPart) { return "$scheme`://$hostPart`:$portPart" }
+    return "$scheme`://$hostPart"
 }
 
 function Invoke-TargetCheck {
